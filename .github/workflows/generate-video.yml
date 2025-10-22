@@ -2,58 +2,68 @@ name: Generate Motivational Video
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'generate_video.py'
+      - '.github/workflows/generate-video.yml'
 
 jobs:
-  build:
+  create-video:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: System deps (ffmpeg + fonts)
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-liberation
 
-      - name: Set up Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install Python deps
+      - name: Install Python packages
         run: |
           python -m pip install --upgrade pip
-          pip install moviepy==1.0.3 pillow pandas requests imageio imageio-ffmpeg
+          pip install moviepy==1.0.3 Pillow pandas requests imageio imageio-ffmpeg
 
-      - name: Verify assets exist
+      - name: Verify repository structure
         run: |
-          echo "=== Checking Assets ==="
+          echo "=== Repository Structure ==="
+          echo "Root files:"
+          ls -la
+          echo ""
           echo "Background images:"
           ls -la assets/background/ || exit 1
           echo ""
           echo "Music files:"
           ls -la assets/music/ || exit 1
 
-      - name: Run video generation
+      - name: Generate motivational video
         env:
           PYTHONUNBUFFERED: "1"
-        run: python -u generate_video.py
-        timeout-minutes: 10
+        run: |
+          echo "Starting video generation..."
+          python -u generate_video.py
 
-      - name: Verify output
+      - name: Verify video output
         run: |
           if [ ! -f motivational_video.mp4 ]; then
-            echo "ERROR: Video was not created"
+            echo "ERROR: Video file was not created"
             exit 1
           fi
           echo "✅ Video created successfully:"
           ls -lh motivational_video.mp4
+          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 motivational_video.mp4 | xargs printf "Duration: %.2f seconds\n"
 
-      - name: Upload video artifact
+      - name: Upload video as artifact
         uses: actions/upload-artifact@v4
         with:
           name: motivational-video-${{ github.run_number }}
           path: motivational_video.mp4
-          compression-level: 1
           retention-days: 30
+          compression-level: 1
