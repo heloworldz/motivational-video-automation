@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+"""
+Motivational Video Generator
+Creates a 60-second video with random background, music, and quote
+"""
+
 import os
 import random
 import requests
@@ -10,217 +16,214 @@ from moviepy.editor import (
     ImageClip,
     concatenate_audioclips,
 )
-from PIL import Image, ImageDraw, ImageFont, __version__ as PIL_VERSION
+from PIL import Image, ImageDraw, ImageFont
 
 # ================= CONFIGURATION =================
 CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRND7UwlVedot36-b5MyqJ2xWj_7jvAJBy7f-t8zy7HANfZKhp5nJm4hNb3DM4mfL5gGHtEmbOJRB4b/pub?gid=0&single=true&output=csv"
 VIDEO_DURATION = 60  # seconds
 FONT_SIZE = 48
 TEXT_COLOR = "white"
-TEXT_BG_OPACITY = 0.2  # Semi-transparent black background for text
+TEXT_BG_OPACITY = 0.25  # Semi-transparent background
 MAX_CHARS_PER_LINE = 40
 
 BACKGROUND_DIR = "assets/background"
 MUSIC_DIR = "assets/music"
 
-print(f"Pillow version: {PIL_VERSION}")
-print("="*50)
+print("="*60)
+print("MOTIVATIONAL VIDEO GENERATOR")
+print("="*60)
 
-# ================= SELECT RANDOM ASSETS =================
+# ================= HELPER FUNCTIONS =================
 def get_random_file(directory, extensions):
-    """Get a random file from directory with given extensions"""
+    """Select a random file from directory with specified extensions"""
     if not os.path.isdir(directory):
-        raise SystemExit(f"Directory not found: {directory}")
+        raise FileNotFoundError(f"Directory not found: {directory}")
     
-    files = []
-    for f in os.listdir(directory):
-        if any(f.lower().endswith(ext) for ext in extensions):
-            files.append(os.path.join(directory, f))
+    valid_files = []
+    for filename in os.listdir(directory):
+        if any(filename.lower().endswith(ext) for ext in extensions):
+            valid_files.append(os.path.join(directory, filename))
     
-    if not files:
-        raise SystemExit(f"No valid files found in {directory}")
+    if not valid_files:
+        raise FileNotFoundError(f"No valid files found in {directory}")
     
-    chosen = random.choice(files)
-    print(f"Selected from {directory}: {os.path.basename(chosen)}")
-    return chosen
+    selected = random.choice(valid_files)
+    return selected
 
-# Select random background and music
-background_file = get_random_file(BACKGROUND_DIR, ['.jpg', '.jpeg', '.png'])
-music_file = get_random_file(MUSIC_DIR, ['.mp3', '.wav', '.m4a'])
-
-# ================= FETCH RANDOM QUOTE FROM CSV =================
-print("\nFetching quotes from Google Sheets...")
-resp = requests.get(CSV_URL)
-resp.raise_for_status()
-df = pd.read_csv(io.StringIO(resp.text))
-
-# Collect all available quotes
-all_quotes = []
-
-# Try Formatted column first
-if "Formatted" in df.columns:
-    formatted = df["Formatted"].dropna()
-    all_quotes.extend([str(q).strip() for q in formatted if str(q).strip()])
-
-# If no formatted quotes, build from Quote and Author
-if not all_quotes and "Quote" in df.columns:
-    quotes = df["Quote"].dropna()
-    authors = df["Author"].dropna() if "Author" in df.columns else pd.Series()
+def fetch_quotes_from_csv():
+    """Fetch all quotes from Google Sheets CSV"""
+    print("Fetching quotes from Google Sheets...")
+    try:
+        response = requests.get(CSV_URL, timeout=10)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        raise SystemExit(f"Failed to fetch CSV: {e}")
     
-    for i, q in enumerate(quotes):
-        q = str(q).strip()
-        if q:
-            if i < len(authors):
-                a = str(authors.iloc[i]).strip()
-                if a and a != 'nan':
-                    all_quotes.append(f""{q}" — {a}")
+    df = pd.read_csv(io.StringIO(response.text))
+    quotes = []
+    
+    # Try Formatted column first
+    if "Formatted" in df.columns:
+        formatted = df["Formatted"].dropna()
+        quotes.extend([str(q).strip() for q in formatted if str(q).strip()])
+    
+    # Fallback to Quote and Author columns
+    if not quotes and "Quote" in df.columns:
+        quote_col = df["Quote"].dropna()
+        author_col = df["Author"].dropna() if "Author" in df.columns else pd.Series()
+        
+        for i, quote_text in enumerate(quote_col):
+            quote_text = str(quote_text).strip()
+            if quote_text:
+                if i < len(author_col):
+                    author = str(author_col.iloc[i]).strip()
+                    if author and author != 'nan':
+                        quotes.append(f'"{quote_text}" — {author}')
+                    else:
+                        quotes.append(f'"{quote_text}"')
                 else:
-                    all_quotes.append(f""{q}"")
-            else:
-                all_quotes.append(f""{q}"")
+                    quotes.append(f'"{quote_text}"')
+    
+    if not quotes:
+        raise ValueError("No quotes found in CSV")
+    
+    return quotes
 
-if not all_quotes:
-    raise SystemExit("No quotes found in CSV")
-
-# Select random quote
-selected_quote = random.choice(all_quotes)
-print(f"Selected quote: {selected_quote[:80]}..." if len(selected_quote) > 80 else f"Selected quote: {selected_quote}")
-
-# ================= FONT HELPERS =================
 def load_font(size):
+    """Load a suitable font"""
     font_paths = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
     ]
     
-    for path in font_paths:
-        if os.path.exists(path):
+    for font_path in font_paths:
+        if os.path.exists(font_path):
             try:
-                return ImageFont.truetype(path, size)
+                return ImageFont.truetype(font_path, size)
             except Exception:
                 continue
     
-    print("Warning: Using default font")
+    # Fallback to default
     return ImageFont.load_default()
 
-def measure_text(draw, text, font):
-    """Measure text dimensions"""
-    try:
-        bbox = draw.textbbox((0, 0), text, font=font)
-        return bbox[2] - bbox[0], bbox[3] - bbox[1]
-    except AttributeError:
-        return draw.textsize(text, font=font)
-
-def get_line_height(font):
-    """Get line height for font"""
-    try:
-        ascent, descent = font.getmetrics()
-        return ascent + descent + 10
-    except Exception:
-        return FONT_SIZE + 10
-
-# ================= CREATE TEXT OVERLAY =================
-def create_text_overlay(text, img_size):
-    """Create transparent image with text overlay"""
-    width, height = img_size
+def create_text_overlay(text, dimensions):
+    """Create a transparent PNG with text overlay"""
+    width, height = dimensions
     font = load_font(FONT_SIZE)
+    
+    # Create transparent image
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
     
     # Wrap text
     wrapper = textwrap.TextWrapper(width=MAX_CHARS_PER_LINE, break_long_words=False)
     lines = wrapper.wrap(text)
     
-    # Create transparent image
-    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
+    # Calculate text dimensions
+    line_height = FONT_SIZE + 15
+    total_text_height = line_height * len(lines)
     
-    # Calculate text block dimensions
-    line_height = get_line_height(font)
-    text_height = line_height * len(lines)
-    
-    # Add semi-transparent background box if opacity > 0
+    # Draw semi-transparent background box
     if TEXT_BG_OPACITY > 0:
-        padding = 30
-        box_height = text_height + (padding * 2)
-        box_width = int(width * 0.85)
+        padding = 40
+        box_width = int(width * 0.8)
+        box_height = total_text_height + (padding * 2)
         box_x = (width - box_width) // 2
         box_y = (height - box_height) // 2
         
         draw.rectangle(
-            [box_x, box_y, box_x + box_width, box_y + box_height],
+            [(box_x, box_y), (box_x + box_width, box_y + box_height)],
             fill=(0, 0, 0, int(255 * TEXT_BG_OPACITY))
         )
     
-    # Draw each line of text
-    y_position = (height - text_height) // 2
+    # Draw text centered
+    y_position = (height - total_text_height) // 2
     
     for line in lines:
-        text_width, text_h = measure_text(draw, line, font)
+        # Get text width for centering
+        bbox = draw.textbbox((0, 0), line, font=font)
+        text_width = bbox[2] - bbox[0]
         x_position = (width - text_width) // 2
+        
         draw.text((x_position, y_position), line, font=font, fill=TEXT_COLOR)
         y_position += line_height
     
-    return overlay
+    return img
 
-# ================= CREATE VIDEO =================
-print("\nCreating video...")
+# ================= MAIN PROCESS =================
+def main():
+    # 1. Select random assets
+    print("\n1. Selecting random assets...")
+    background = get_random_file(BACKGROUND_DIR, ['.jpg', '.jpeg', '.png'])
+    music = get_random_file(MUSIC_DIR, ['.mp3', '.wav', '.m4a'])
+    print(f"   Background: {os.path.basename(background)}")
+    print(f"   Music: {os.path.basename(music)}")
+    
+    # 2. Select random quote
+    print("\n2. Selecting random quote...")
+    quotes = fetch_quotes_from_csv()
+    selected_quote = random.choice(quotes)
+    print(f"   Total quotes available: {len(quotes)}")
+    print(f"   Selected: {selected_quote[:60]}..." if len(selected_quote) > 60 else f"   Selected: {selected_quote}")
+    
+    # 3. Create video base
+    print("\n3. Creating video...")
+    video_clip = ImageClip(background).set_duration(VIDEO_DURATION)
+    width, height = video_clip.size
+    print(f"   Dimensions: {width}x{height}")
+    print(f"   Duration: {VIDEO_DURATION} seconds")
+    
+    # 4. Create and add text overlay
+    print("\n4. Adding text overlay...")
+    text_img = create_text_overlay(selected_quote, (width, height))
+    text_img.save("temp_overlay.png")
+    text_clip = ImageClip("temp_overlay.png").set_duration(VIDEO_DURATION)
+    
+    # Composite video with text
+    video = CompositeVideoClip([video_clip, text_clip])
+    
+    # 5. Add and process audio
+    print("\n5. Processing audio...")
+    audio = AudioFileClip(music)
+    
+    # Loop audio if needed
+    if audio.duration < VIDEO_DURATION:
+        loops = int(VIDEO_DURATION / audio.duration) + 1
+        print(f"   Looping audio {loops} times")
+        audio = concatenate_audioclips([audio] * loops)
+    
+    audio = audio.subclip(0, VIDEO_DURATION)
+    video = video.set_audio(audio)
+    
+    # 6. Export final video
+    print("\n6. Rendering final video...")
+    print("   This may take 1-2 minutes...")
+    
+    video.write_videofile(
+        "motivational_video.mp4",
+        fps=24,
+        codec="libx264",
+        audio_codec="aac",
+        threads=4,
+        preset="faster",
+        logger=None  # Suppress verbose output
+    )
+    
+    # Cleanup
+    if os.path.exists("temp_overlay.png"):
+        os.remove("temp_overlay.png")
+    
+    print("\n" + "="*60)
+    print("✅ VIDEO CREATED SUCCESSFULLY!")
+    print(f"   Output: motivational_video.mp4")
+    print(f"   Size: {os.path.getsize('motivational_video.mp4') / (1024*1024):.2f} MB")
+    print("="*60)
 
-# Load background image
-print(f"Loading background: {background_file}")
-background = ImageClip(background_file).set_duration(VIDEO_DURATION)
-
-# Get video dimensions
-video_width, video_height = background.size
-print(f"Video dimensions: {video_width}x{video_height}")
-
-# Create text overlay
-print("Creating text overlay...")
-text_overlay_img = create_text_overlay(selected_quote, (video_width, video_height))
-text_overlay_path = "temp_text_overlay.png"
-text_overlay_img.save(text_overlay_path)
-
-# Create text clip
-text_clip = ImageClip(text_overlay_path).set_duration(VIDEO_DURATION).set_position("center")
-
-# Composite video
-video = CompositeVideoClip([background, text_clip])
-
-# ================= ADD MUSIC =================
-print(f"Loading music: {music_file}")
-audio = AudioFileClip(music_file)
-
-# Loop audio if shorter than video
-if audio.duration < VIDEO_DURATION:
-    loops_needed = int(VIDEO_DURATION / audio.duration) + 1
-    print(f"Looping audio {loops_needed} times")
-    audio = concatenate_audioclips([audio] * loops_needed)
-
-# Trim audio to exact video duration
-audio = audio.subclip(0, VIDEO_DURATION)
-video = video.set_audio(audio)
-
-# ================= EXPORT VIDEO =================
-print("\nExporting video (this may take a minute)...")
-output_path = "motivational_video.mp4"
-
-video.write_videofile(
-    output_path,
-    fps=24,
-    codec="libx264",
-    audio_codec="aac",
-    threads=4,
-    preset="medium",
-    temp_audiofile="temp-audio.m4a",
-    remove_temp=True
-)
-
-# Cleanup temporary file
-if os.path.exists(text_overlay_path):
-    os.remove(text_overlay_path)
-
-print(f"\n✅ Success! Created {output_path}")
-print(f"   Duration: {VIDEO_DURATION} seconds")
-print(f"   Background: {os.path.basename(background_file)}")
-print(f"   Music: {os.path.basename(music_file)}")
-print(f"   Quote: {selected_quote[:50]}...")
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print(f"\n❌ ERROR: {e}")
+        raise
