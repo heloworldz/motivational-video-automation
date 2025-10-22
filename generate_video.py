@@ -39,7 +39,11 @@ def make_text_image(text, size, font_size=48, text_color="white", bg_opacity=0.0
         font = ImageFont.load_default()
     wrapper = textwrap.TextWrapper(width=max_chars)
     lines = wrapper.wrap(text=text)
-    line_h = font.getsize("A")[1] + 8
+
+    # Get line height correctly
+    bbox = font.getbbox("A")
+    line_h = (bbox[3] - bbox[1]) + 8  # old getsize -> bbox
+
     text_block_h = line_h * len(lines)
 
     img = Image.new("RGBA", (w, h), (0,0,0,0))
@@ -54,12 +58,14 @@ def make_text_image(text, size, font_size=48, text_color="white", bg_opacity=0.0
 
     y_text = (h - text_block_h)//2
     for line in lines:
-        line_w, _ = draw.textsize(line, font=font)
+        bbox_line = font.getbbox(line)
+        line_w = bbox_line[2] - bbox_line[0]
         x_text = (w - line_w)//2
         draw.text((x_text, y_text), line, font=font, fill=text_color)
         y_text += line_h
 
     return img
+
 
 # ================== PREPARE BACKGROUND CLIP ==================
 if bg_choice.lower().endswith((".mp4", ".mov", ".gif")):
