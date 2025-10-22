@@ -12,9 +12,9 @@ TEXT_BG_OPACITY = 0.0
 MAX_CHARS_PER_LINE = 40
 
 # Pick random background and music
-backgrounds = os.listdir("assets/background")
+background = os.listdir("assets/background")
 musics = os.listdir("assets/music")
-bg_choice = os.path.join("assets/background", random.choice(backgrounds))
+bg_choice = os.path.join("assets/background", random.choice(background))
 music_choice = os.path.join("assets/music", random.choice(musics))
 
 # Fetch latest quote
