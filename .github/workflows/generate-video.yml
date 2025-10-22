@@ -8,17 +8,28 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # Step 1: Checkout the repository
       - uses: actions/checkout@v3
+
+      # Step 2: Set up Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
+
+      # Step 3: Install dependencies (fixed)
       - name: Install dependencies
         run: |
-          pip install moviepy pillow pandas requests
+          python -m pip install --upgrade pip
+          pip install --upgrade setuptools wheel
+          pip install moviepy pillow pandas requests imageio-ffmpeg
+
+      # Step 4: Run the video generation script
       - name: Run video generation
         run: |
           python generate_video.py
+
+      # Step 5: Upload the generated MP4 as an artifact
       - name: Upload MP4 artifact
         uses: actions/upload-artifact@v4
         with:
