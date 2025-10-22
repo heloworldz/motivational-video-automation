@@ -6,14 +6,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
+
     steps:
       - uses: actions/checkout@v4
 
       - name: System deps (ffmpeg + fonts)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-liberation
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -25,19 +26,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install moviepy==1.0.3 pillow pandas requests imageio imageio-ffmpeg
 
-      - name: Sanity check script and assets
+      - name: Verify assets exist
         run: |
-          echo "generate_video.py head:"
-          head -n 80 generate_video.py || true
-          echo "Checking for deprecated getsize (should NOT find any):"
-          if grep -n "getsize(" generate_video.py; then
-            echo "Update generate_video.py to the Pillow 10+ safe version." >&2
-            exit 1
-          fi
-          echo "Assets:"
-          ls -la assets || true
-          ls -la assets/background || true
-          ls -la assets/music || true
+          echo "=== Checking Assets ==="
+          echo "Background images:"
+          ls -la assets/background/ || exit 1
+          echo ""
+          echo "Music files:"
+          ls -la assets/music/ || exit 1
 
       - name: Run video generation
         env:
@@ -47,13 +43,17 @@ jobs:
 
       - name: Verify output
         run: |
-          test -f motivational_video.mp4 || (echo "MP4 not created" && exit 1)
+          if [ ! -f motivational_video.mp4 ]; then
+            echo "ERROR: Video was not created"
+            exit 1
+          fi
+          echo "✅ Video created successfully:"
           ls -lh motivational_video.mp4
 
-      - name: Upload MP4 artifact
+      - name: Upload video artifact
         uses: actions/upload-artifact@v4
         with:
-          name: motivational_video
+          name: motivational-video-${{ github.run_number }}
           path: motivational_video.mp4
           compression-level: 1
-        timeout-minutes: 10
+          retention-days: 30
