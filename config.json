@@ -2,12 +2,18 @@
   "video": {
     "width": 1920,
     "height": 1080,
-    "max_duration": 60
+    "fps": 24,
+    "max_duration": 60,
+    "background_color": "#000000"
   },
   "text": {
     "quote_font_size": 70,
     "author_font_size": 50,
-    "font_color": "white"
+    "font_color": "white",
+    "font_family": "Arial-Bold",
+    "max_quote_width": 1600,
+    "stroke_width": 2,
+    "stroke_color": "black"
   },
   "music": {
     "volume": 0.5
