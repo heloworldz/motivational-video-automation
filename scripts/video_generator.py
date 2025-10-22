@@ -1,12 +1,11 @@
 import os
 import json
 import random
+import pandas as pd
 from moviepy.editor import *
 from moviepy.video.fx.all import fadein, fadeout
 import moviepy.audio.fx.all as afx
 from PIL import Image, ImageDraw, ImageFont
-import gspread
-from google.oauth2.service_account import Credentials
 from datetime import datetime
 
 class QuoteVideoGenerator:
@@ -41,27 +40,19 @@ class QuoteVideoGenerator:
         print(f"✓ Found {len(self.backgrounds)} background images")
         print(f"✓ Found {len(self.music_files)} music files")
     
-    def get_quotes_from_sheets(self):
-        """Fetch quotes from Google Sheets"""
+    def get_quotes_from_csv(self, csv_url):
+        """Fetch quotes from public Google Sheets CSV"""
         try:
-            # Set up credentials
-            scope = ['https://spreadsheets.google.com/feeds',
-                    'https://www.googleapis.com/auth/drive']
+            # Read CSV from URL
+            df = pd.read_csv(csv_url)
             
-            creds = Credentials.from_service_account_file(
-                'credentials.json', 
-                scopes=scope
-            )
-            client = gspread.authorize(creds)
+            # Convert to list of dictionaries
+            quotes = df.to_dict('records')
             
-            # Open the sheet
-            sheet = client.open(os.getenv('SHEET_NAME')).sheet1
+            print(f"✓ Fetched {len(quotes)} quotes from Google Sheets")
+            print(f"✓ Columns found: {list(df.columns)}")
             
-            # Get all records
-            records = sheet.get_all_records()
-            print(f"✓ Fetched {len(records)} quotes from Google Sheets")
-            
-            return records
+            return quotes
         except Exception as e:
             print(f"⚠ Error fetching from Google Sheets: {e}")
             return []
@@ -120,7 +111,7 @@ class QuoteVideoGenerator:
             y += self.config['text']['quote_font_size'] + 20
         
         # Draw author
-        author_text = f"- {author}"
+        author_text = f"— {author}"
         bbox = draw.textbbox((0, 0), author_text, font=author_font)
         author_width = bbox[2] - bbox[0]
         x = (self.width - author_width) // 2
@@ -169,6 +160,7 @@ class QuoteVideoGenerator:
     
     def generate_video(self, quote_data):
         """Generate video for a single quote"""
+        # Handle different column name formats
         quote = quote_data.get('Quote', quote_data.get('quote', ''))
         author = quote_data.get('Author', quote_data.get('author', 'Unknown'))
         
@@ -230,7 +222,9 @@ class QuoteVideoGenerator:
         
         # Generate output filename
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_path = f'output/quote_video_{timestamp}.mp4'
+        safe_author = "".join(c for c in author if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        safe_author = safe_author.replace(' ', '_')[:30]
+        output_path = f'output/quote_{safe_author}_{timestamp}.mp4'
         
         # Write video file
         print("Rendering video...")
@@ -268,8 +262,12 @@ def main():
         print("- assets/music/m1.mp3 through m5.mp3")
         return
     
+    # Your Google Sheets CSV URL
+    csv_url = os.getenv('SHEET_CSV_URL', 
+                        'https://docs.google.com/spreadsheets/d/e/2PACX-1vRND7UwlVedot36-b5MyqJ2xWj_7jvAJBy7f-t8zy7HANfZKhp5nJm4hNb3DM4mfL5gGHtEmbOJRB4b/pub?gid=0&single=true&output=csv')
+    
     # Get quotes from Google Sheets
-    quotes = generator.get_quotes_from_sheets()
+    quotes = generator.get_quotes_from_csv(csv_url)
     
     if not quotes:
         print("\n⚠ No quotes found in Google Sheets. Using sample quote...")
