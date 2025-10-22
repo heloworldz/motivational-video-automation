@@ -1,8 +1,8 @@
 name: Generate Motivational Video
 
 on:
-  workflow_dispatch:   # Manual trigger from GitHub UI
-  repository_dispatch: # Can be triggered by n8n webhook
+  workflow_dispatch:   # manual trigger
+  repository_dispatch: # can be triggered by n8n
 
 jobs:
   build:
