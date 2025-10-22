@@ -1,35 +1,44 @@
-# Motivational Video Generator
+# Quote Video Generator 🎬
 
-Automatically generates 60-second motivational videos with random combinations of backgrounds, music, and quotes.
+Automatically generates motivational quote videos with background music and images.
 
 ## Features
--  Creates 60-second videos automatically
--  Random background selection from 5 images
--  Random music selection from 5 tracks
--  Random quote from Google Sheets
--  Fully automated via GitHub Actions
+- Fetches quotes from Google Sheets
+- Random background selection
+- NCS music integration
+- Automated video generation via GitHub Actions
+- Maximum 60-second videos
 
-## How to Use
+## Setup
 
-1. **Run via GitHub Actions:**
-   - Go to Actions tab
-   - Select "Generate Motivational Video"
-   - Click "Run workflow"
-   - Download video from Artifacts
+### 1. Google Sheets API Setup
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project
+3. Enable Google Sheets API
+4. Create Service Account credentials
+5. Download the JSON credentials file
 
-2. **Assets Structure:**
-assets/
-├── background/
-│ ├── i1.jpg to i5.jpg
-└── music/
-└── m1.mp3 to m5.mp3
+### 2. GitHub Secrets
+Add these secrets to your repository (Settings → Secrets and variables → Actions):
+
+- `GOOGLE_CREDENTIALS`: Content of your Google credentials JSON file
+- `SHEET_NAME`: Name of your Google Sheet
+
+### 3. Add Assets
+- Place background images in `assets/backgrounds/`
+- Place NCS music files in `assets/music/`
+
+### 4. Run
+- Manual: Go to Actions → Generate Quote Video → Run workflow
+- Automatic: Runs daily at 9 AM UTC
+- On Push: Triggers when scripts are modified
+
 ## Configuration
-- Video Duration: 60 seconds
-- Output: 1920x1080 (depends on background image)
-- Format: MP4 (H.264/AAC)
+Edit `config.json` to customize:
+- Video dimensions
+- Font sizes
+- Colors
+- Music volume
 
-## Workflow
-Each run produces a unique video by randomly combining:
-- 1 of 5 background images
-- 1 of 5 music tracks
-- 1 random quote from CSV
+## Output
+Videos are saved in `output/` and available as artifacts in GitHub Actions.
