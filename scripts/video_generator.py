@@ -3,6 +3,7 @@ import json
 import random
 from moviepy.editor import *
 from moviepy.video.fx.all import fadein, fadeout
+import moviepy.audio.fx.all as afx
 from PIL import Image, ImageDraw, ImageFont
 import gspread
 from google.oauth2.service_account import Credentials
@@ -17,6 +18,28 @@ class QuoteVideoGenerator:
         self.height = self.config['video']['height']
         self.fps = self.config['video']['fps']
         self.max_duration = self.config['video']['max_duration']
+        
+        # Define available assets
+        self.backgrounds = [f'assets/backgrounds/i{i}.jpg' for i in range(1, 6)]
+        self.music_files = [f'assets/music/m{i}.mp3' for i in range(1, 6)]
+    
+    def verify_assets(self):
+        """Verify all required assets exist"""
+        missing = []
+        
+        for bg in self.backgrounds:
+            if not os.path.exists(bg):
+                missing.append(bg)
+        
+        for music in self.music_files:
+            if not os.path.exists(music):
+                missing.append(music)
+        
+        if missing:
+            raise FileNotFoundError(f"Missing assets: {', '.join(missing)}")
+        
+        print(f"✓ Found {len(self.backgrounds)} background images")
+        print(f"✓ Found {len(self.music_files)} music files")
     
     def get_quotes_from_sheets(self):
         """Fetch quotes from Google Sheets"""
@@ -31,26 +54,25 @@ class QuoteVideoGenerator:
             )
             client = gspread.authorize(creds)
             
-            # Open the sheet (replace with your sheet name)
+            # Open the sheet
             sheet = client.open(os.getenv('SHEET_NAME')).sheet1
             
             # Get all records
             records = sheet.get_all_records()
+            print(f"✓ Fetched {len(records)} quotes from Google Sheets")
             
             return records
         except Exception as e:
-            print(f"Error fetching from Google Sheets: {e}")
+            print(f"⚠ Error fetching from Google Sheets: {e}")
             return []
     
     def select_random_background(self):
-        """Select a random background image"""
-        bg_folder = 'assets/backgrounds'
-        backgrounds = [f for f in os.listdir(bg_folder) if f.endswith(('.jpg', '.png', '.jpeg'))]
-        
-        if not backgrounds:
-            raise FileNotFoundError("No background images found!")
-        
-        return os.path.join(bg_folder, random.choice(backgrounds))
+        """Select a random background image (i1.jpg to i5.jpg)"""
+        return random.choice(self.backgrounds)
+    
+    def select_random_music(self):
+        """Select a random music file (m1.mp3 to m5.mp3)"""
+        return random.choice(self.music_files)
     
     def create_text_image(self, quote, author):
         """Create an image with the quote text"""
@@ -64,6 +86,7 @@ class QuoteVideoGenerator:
             author_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 
                                             self.config['text']['author_font_size'])
         except:
+            print("⚠ Using default font (custom fonts not available)")
             quote_font = ImageFont.load_default()
             author_font = ImageFont.load_default()
         
@@ -149,17 +172,27 @@ class QuoteVideoGenerator:
         quote = quote_data.get('Quote', quote_data.get('quote', ''))
         author = quote_data.get('Author', quote_data.get('author', 'Unknown'))
         
-        print(f"Generating video for: {quote[:50]}...")
+        print(f"\n{'='*60}")
+        print(f"Generating video for quote:")
+        print(f'"{quote[:50]}..."')
+        print(f"By: {author}")
+        print(f"{'='*60}\n")
         
-        # Select random background
+        # Select random background and music
         bg_path = self.select_random_background()
+        music_path = self.select_random_music()
         
-        # Calculate video duration (estimate based on reading speed)
+        print(f"Using background: {os.path.basename(bg_path)}")
+        print(f"Using music: {os.path.basename(music_path)}")
+        
+        # Calculate video duration (based on reading speed)
         # Average reading speed: ~200 words per minute
         word_count = len(quote.split())
         estimated_duration = max(10, min((word_count / 200) * 60 + 5, self.max_duration))
         
-        # Load background image
+        print(f"Video duration: {estimated_duration:.1f} seconds")
+        
+        # Load and prepare background image
         bg_clip = ImageClip(bg_path).set_duration(estimated_duration)
         bg_clip = bg_clip.resize((self.width, self.height))
         
@@ -176,15 +209,22 @@ class QuoteVideoGenerator:
         video = video.fx(fadein, 1).fx(fadeout, 1)
         
         # Add music
-        music_path = self.get_random_music()
-        audio = AudioFileClip(music_path).subclip(0, min(estimated_duration, self.max_duration))
+        print("Processing audio...")
+        audio = AudioFileClip(music_path)
+        
+        # Random start point in the music (if music is longer than video)
+        if audio.duration > estimated_duration:
+            max_start = audio.duration - estimated_duration
+            start_time = random.uniform(0, max_start)
+            audio = audio.subclip(start_time, start_time + estimated_duration)
+        else:
+            # Loop music if it's shorter than video
+            audio = afx.audio_loop(audio, duration=estimated_duration)
+        
         audio = audio.volumex(self.config['music']['volume'])
         
-        # If music is shorter than video, loop it
-        if audio.duration < estimated_duration:
-            audio = afx.audio_loop(audio, duration=estimated_duration)
-        else:
-            audio = audio.subclip(0, estimated_duration)
+        # Add fade in/out to audio
+        audio = audio.audio_fadein(1).audio_fadeout(1)
         
         video = video.set_audio(audio)
         
@@ -193,48 +233,57 @@ class QuoteVideoGenerator:
         output_path = f'output/quote_video_{timestamp}.mp4'
         
         # Write video file
+        print("Rendering video...")
         video.write_videofile(
             output_path,
             fps=self.fps,
             codec='libx264',
             audio_codec='aac',
             temp_audiofile='temp-audio.m4a',
-            remove_temp=True
+            remove_temp=True,
+            preset='medium',
+            threads=4
         )
         
         # Cleanup
         if os.path.exists(text_img_path):
             os.remove(text_img_path)
         
-        print(f"Video generated: {output_path}")
+        print(f"\n✓ Video generated successfully: {output_path}")
         return output_path
-    
-    def get_random_music(self):
-        """Get a random music file"""
-        music_folder = 'assets/music'
-        music_files = [f for f in os.listdir(music_folder) if f.endswith(('.mp3', '.wav', '.m4a'))]
-        
-        if not music_files:
-            raise FileNotFoundError("No music files found!")
-        
-        return os.path.join(music_folder, random.choice(music_files))
 
 def main():
+    print("Quote Video Generator")
+    print("=" * 60)
+    
     generator = QuoteVideoGenerator()
+    
+    # Verify assets exist
+    try:
+        generator.verify_assets()
+    except FileNotFoundError as e:
+        print(f"\n❌ Error: {e}")
+        print("\nPlease ensure all assets are in place:")
+        print("- assets/backgrounds/i1.jpg through i5.jpg")
+        print("- assets/music/m1.mp3 through m5.mp3")
+        return
     
     # Get quotes from Google Sheets
     quotes = generator.get_quotes_from_sheets()
     
     if not quotes:
-        print("No quotes found. Using sample quote...")
+        print("\n⚠ No quotes found in Google Sheets. Using sample quote...")
         quotes = [{
             'Quote': 'The only way to do great work is to love what you do.',
             'Author': 'Steve Jobs'
         }]
     
-    # Generate video for the latest quote (or random)
-    latest_quote = quotes[-1]  # or use random.choice(quotes)
+    # Generate video for the latest quote
+    latest_quote = quotes[-1]
     generator.generate_video(latest_quote)
+    
+    print("\n" + "=" * 60)
+    print("Done!")
 
 if __name__ == "__main__":
     main()
