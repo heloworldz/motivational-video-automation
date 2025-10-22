@@ -4,7 +4,7 @@ from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip, Ima
 from PIL import Image, ImageDraw, ImageFont
 
 # CONFIGURATION
-CSV_URL = "YOUR_PUBLISHED_CSV_URL_HERE"  # replace with your public CSV
+CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRND7UwlVedot36-b5MyqJ2xWj_7jvAJBy7f-t8zy7HANfZKhp5nJm4hNb3DM4mfL5gGHtEmbOJRB4b/pub?gid=0&single=true&output=csv"  # replace with your public CSV
 MIN_DURATION = 60  # seconds
 FONT_SIZE = 48
 TEXT_COLOR = "white"
