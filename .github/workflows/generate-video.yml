@@ -10,30 +10,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show repo structure and script header
-        run: |
-          echo "Repo root:"
-          ls -la
-          echo "Assets:"
-          ls -la assets || true
-          ls -la assets/background || true
-          ls -la assets/music || true
-          echo "generate_video.py (first 80 lines):"
-          head -n 80 generate_video.py || true
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # EITHER modern Pillow with fixed code:
-          pip install moviepy==1.0.3 pillow pandas requests imageio-ffmpeg
-          # OR keep your old script and pin older Pillow:
-          # pip install moviepy==1.0.3 "pillow<10" pandas requests imageio-ffmpeg
+          pip install -r requirements.txt
+
+      - name: Sanity check repo and script
+        run: |
+          echo "Repo root:"; ls -la
+          echo "Assets:"; ls -la assets || true; ls -la assets/background || true; ls -la assets/music || true
+          echo "generate_video.py (first 60 lines):"
+          head -n 60 generate_video.py || true
+          echo "Searching for deprecated getsize usage (should NOT find any):"
+          if grep -n "getsize(" generate_video.py; then
+            echo "Found deprecated font.getsize — update generate_video.py to the Pillow 10+ safe version." >&2
+            exit 1
+          fi
 
       - name: Run video generation
         env:
@@ -44,5 +43,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: motivational_video
-          path: |
-            motivational_video.mp4
+          path: motivational_video.mp4
