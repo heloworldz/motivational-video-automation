@@ -1,69 +1,59 @@
-name: Generate Motivational Video
+name: Generate Quote Video
 
 on:
-  workflow_dispatch:
+  schedule:
+    # Run every day at 9 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch:  # Allow manual trigger
   push:
+    branches:
+      - main
     paths:
-      - 'generate_video.py'
-      - '.github/workflows/generate-video.yml'
+      - 'scripts/**'
 
 jobs:
-  create-video:
+  generate-video:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-
+    
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-liberation
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install Python packages
-        run: |
-          python -m pip install --upgrade pip
-          pip install moviepy==1.0.3 Pillow pandas requests imageio imageio-ffmpeg
-
-      - name: Verify repository structure
-        run: |
-          echo "=== Repository Structure ==="
-          echo "Root files:"
-          ls -la
-          echo ""
-          echo "Background images:"
-          ls -la assets/background/ || exit 1
-          echo ""
-          echo "Music files:"
-          ls -la assets/music/ || exit 1
-
-      - name: Generate motivational video
-        env:
-          PYTHONUNBUFFERED: "1"
-        run: |
-          echo "Starting video generation..."
-          python -u generate_video.py
-
-      - name: Verify video output
-        run: |
-          if [ ! -f motivational_video.mp4 ]; then
-            echo "ERROR: Video file was not created"
-            exit 1
-          fi
-          echo "✅ Video created successfully:"
-          ls -lh motivational_video.mp4
-          ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 motivational_video.mp4 | xargs printf "Duration: %.2f seconds\n"
-
-      - name: Upload video as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: motivational-video-${{ github.run_number }}
-          path: motivational_video.mp4
-          retention-days: 30
-          compression-level: 1
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg imagemagick
+        sudo apt-get install -y fonts-dejavu-core
+    
+    - name: Install Python dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Generate video
+      env:
+        SHEET_CSV_URL: ${{ secrets.SHEET_CSV_URL }}
+      run: |
+        python scripts/video_generator.py
+    
+    - name: Upload video to artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: quote-videos
+        path: output/*.mp4
+        retention-days: 30
+    
+    - name: Commit and push video (optional)
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add output/*.mp4 || true
+        git commit -m "Add generated quote video [skip ci]" || true
+        git push || true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
