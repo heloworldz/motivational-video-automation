@@ -43,12 +43,13 @@ def make_text_image(text, size, font_size=48, text_color="white", bg_opacity=0.0
         font = ImageFont.truetype("DejaVuSans.ttf", font_size)
     except:
         font = ImageFont.load_default()
-    
+
     wrapper = textwrap.TextWrapper(width=max_chars)
     lines = wrapper.wrap(text=text)
 
-    # Use getbbox instead of getsize (Pillow >= 10)
-    line_h = (font.getbbox("A")[3] - font.getbbox("A")[1]) + 8
+    # Calculate line height using getbbox
+    bbox = font.getbbox("A")
+    line_h = (bbox[3] - bbox[1]) + 8
     text_block_h = line_h * len(lines)
 
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
